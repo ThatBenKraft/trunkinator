@@ -15,9 +15,9 @@ __maintainer__ = "Ben Kraft"
 __email__ = "benjamin.kraft@tufts.edu"
 __status__ = "Prototype"
 
-ROLES = [["Ben", "Charlie"], ["Charlie"]]
-
 FLAG_ROSTER_CREATION = False
+
+NUM_ROLES = 5
 
 DATA_PATH = "trunker_data.xlsx"
 
@@ -25,11 +25,57 @@ DATA_PATH = "trunker_data.xlsx"
 def schedule_shows() -> None:
     # sheet_name = input("Please enter show name (Data sheet name): ")
     sheet_name = "Trash Mountain"
+    # Reads excel data into dictionary
+    data_frame = pd.read_excel(DATA_PATH, sheet_name, skiprows=1)
+    trunkers: list[str] = data_frame["Trunker"].to_list()
+    availability_info: dict[str, list[bool]] = data_frame.drop("Trunker", axis=1).to_dict(orient="list")  # type: ignore
 
-    data_frame = pd.read_excel(DATA_PATH, sheet_name)
-    print(data_frame)
+    # Acquires headers from keys
+    headers = list(availability_info.keys())
+    day_names, role_names = headers[NUM_ROLES:], headers[:NUM_ROLES]
 
-    generate_rosters(ROLES, len(ROLES))
+    for day in day_names:
+        print(day)
+        day_availabilities = structure_availabilities(
+            availability_info,
+            trunkers,
+            role_names,
+            day,
+        )
+
+        generate_rosters(day_availabilities, NUM_ROLES)
+
+
+def structure_availabilities(
+    availability_info: dict[str, list[bool]],
+    trunkers: list[str],
+    role_names: list[str],
+    day: str,
+) -> list[list[str]]:
+    role_availabilities: list[list[str]] = []
+
+    # For each role
+    for role in role_names:
+        # Acquires boolean availabilities
+        role_statuses = availability_info[role]
+        day_statuses = availability_info[day]
+        if any(not isinstance(i, bool) for i in role_statuses):
+            raise ValueError("Role availability must be of type Boolean!")
+        if any(not isinstance(i, bool) for i in day_statuses):
+            raise ValueError("Day availability must be of type Boolean!")
+        # Builds list of available trunkers
+        available_trunkers: list[str] = [
+            trunker
+            for trunker, role_status, day_status in zip(
+                trunkers, role_statuses, day_statuses
+            )
+            if role_status and day_status
+        ]
+
+        print(f"Role: {role},   Trunkers: {available_trunkers}")
+        role_availabilities.append(available_trunkers)
+
+    return role_availabilities
 
 
 def generate_rosters(
