@@ -9,7 +9,7 @@ import pandas as pd
 __author__ = "Ben Kraft"
 __copyright__ = "None"
 __credits__ = "Ben Kraft"
-__license__ = "Apache"
+__license__ = "Apache 2.0"
 __version__ = "1.0"
 __maintainer__ = "Ben Kraft"
 __email__ = "benjamin.kraft@tufts.edu"
@@ -33,21 +33,22 @@ class Show:
         """
         self._data = data_frame
         # Create role and roster storages
-        self._availabilities: dict[str, list[list[str]]] = {}
+        self._role_availabilities: dict[str, list[list[str]]] = {}
+        self._trunker_availabilities: dict[str, list[str]] = {}
         self._rosters: dict[str, list[list[str]]] = {}
         # For each day
         for day in self.get_day_names():
             # Calculate availabilities
-            availabilities = [
-                self._calculate_availability(role, day)
+            role_availabilities = [
+                self._calculate_availabilities(role, day)
                 for role in self.get_role_names()
             ]
             # Store availabilities
-            self._availabilities[day] = availabilities
+            self._role_availabilities[day] = role_availabilities
             # Initialize roster
             self._rosters[day] = []
             # Calculate rosters from availabilities
-            self._calculate_rosters(availabilities, day)
+            self._calculate_rosters(role_availabilities, day)
 
     def get_role_names(self) -> list[str]:
         """
@@ -62,11 +63,17 @@ class Show:
         start_index = NUM_ROLES + 1
         return list(self._data.columns)[start_index : start_index + NUM_DAYS]
 
-    def get_availabilities(self, day: str) -> list[list[str]]:
+    def get_trunker_availabilities(self, day: str) -> list[str]:
         """
-        Returns day availabilities.
+        Returns day trunker availabilities.
         """
-        return self._availabilities[day]
+        return self._trunker_availabilities[day]
+
+    def get_role_availabilities(self, day: str) -> list[list[str]]:
+        """
+        Returns day role availabilities.
+        """
+        return self._role_availabilities[day]
 
     def get_rosters(self, day: str) -> list[list[str]]:
         """
@@ -74,14 +81,16 @@ class Show:
         """
         return self._rosters[day]
 
-    def _calculate_availability(self, role: str, day: str) -> list[str]:
+    def _calculate_availabilities(self, role: str, day: str) -> list[str]:
         """
         Returns list of trunkers available for role on day.
         """
-        # Gets combination of role and day availabilities
-        availabilities = self._data[role] & self._data[day]
-        # Returns with which trunkers have these availabilities
-        return list(filter(None, availabilities * self._data["Trunker"]))
+        # Gets list of available trunkers on a day
+        availabilities = self._data["Trunker"] * self._data[day]
+        # Assigns to member dictionary
+        self._trunker_availabilities[day] = list(filter(None, availabilities))
+        # Returns list of available trunkers on a day in a role
+        return list(filter(None, availabilities * self._data[role]))
 
     def _calculate_rosters(
         self,
@@ -129,22 +138,40 @@ def print_shows() -> None:
         print("\n" + f" {day.upper()} ".center(NUM_ROLES * SPACING, "="))
         # Acquires and capitalizes role names
         role_names = [name.upper() for name in show.get_role_names()]
+
         # Prints availabilities
-        for role_name, available_trunkers in zip(
-            role_names, show.get_availabilities(day)
+        def between_lines(contents: str) -> str:
+            return "| " + contents.ljust(SPACING * NUM_ROLES - 4) + " |"
+
+        for role_name, role_availabilities in zip(
+            role_names, show.get_role_availabilities(day)
         ):
-            print(role_name.ljust(10) + ", ".join(available_trunkers))
+            role_contents = role_name.ljust(SPACING)
+            if role_availabilities:
+                role_contents += ", ".join(role_availabilities)
+            else:
+                role_contents += "No Trunkers available!"
+            print(between_lines(role_contents))
+
+        print(between_lines(""))
+        # Gets total number of trunkers available for day
+        num_trunker_availabilities = len(show.get_trunker_availabilities(day))
+        report = f"There are {num_trunker_availabilities} trunkers available for shows on {day}."
+        # Prints report
+        print(between_lines(report))
         # Prints bottom bar
         print("=" * NUM_ROLES * SPACING + "\n")
 
         # Prints role titles
         [print(role_name.center(SPACING), end="") for role_name in role_names]
         print("\n")
-
         # Prints rosters
-        for roster in show.get_rosters(day):
+        rosters = show.get_rosters(day)
+        for roster in rosters:
             [print(trunker.center(SPACING), end="") for trunker in roster]
             print("")
+        # Prints report
+        print(f"\nThere are {len(rosters)} rosters available for shows on {day}.")
 
     print("")
 
