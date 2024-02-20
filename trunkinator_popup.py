@@ -1,9 +1,15 @@
 """
-# Trunkinator
-Used to generate Trunk schedules. Includes Show object used for information 
-calculation and storage.
-Dependencies: pandas, openpyxl
+# Trunkinator Terminal
+Used to generate Trunk schedules. Displays show combinations in popup window.
+Dependencies: pandas
 """
+
+import os
+import random
+import time
+import tkinter as tk
+from pathlib import Path
+from tkinter import scrolledtext
 
 import pandas as pd
 
@@ -16,11 +22,26 @@ __maintainer__ = "Ben Kraft"
 __email__ = "benjamin.kraft@tufts.edu"
 __status__ = "Prototype"
 
-
+# Defines number of roles in show and number of performance days in week
+NUM_ROLES = 5
+NUM_DAYS = 3
 # Amount of blank space used in display padding
 DISPLAY_PADDING = 3
-# Data path for show Excel sheet.
-DATA_PATH = "trunker_data.xlsx"
+# Sets terminal mode
+TERMINAL_MODE = False
+
+# Get the directory of the current script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+# Change the current working directory to the directory of the script
+os.chdir(script_dir)
+# Define a path for trunker show data
+DATA_PATH = Path("trunker_data.xlsx")
+
+
+def output(line: str, newline: bool = True):
+    if newline:
+        line = f"{line}\n"
+    output_text.insert(tk.END, line)
 
 
 class Show:
@@ -38,13 +59,13 @@ class Show:
         """
         Creates Show object and calculates all availabilities.
         """
-        self._data = data_frame
-        self._trunker_availabilities: dict[str, list[str]] = {}
+        self.data = data_frame
+        self.trunker_availabilities: dict[str, list[str]] = {}
         """
         ### Trunker Availabilities
         Dictionary of days tied to lists of trunkers available on that day.
         """
-        self._role_availabilities: dict[str, list[list[str]]] = {}
+        self.role_availabilities: dict[str, list[list[str]]] = {}
         """
         ### Role Availabilities
         Dictionary of days tied to "role" lists. These lists tabulate all 
@@ -52,7 +73,7 @@ class Show:
         Ex. {"Mon": [["Sophie", "Ava"], ["Ben]], "Wed": [["Sophie"], ["Sid"]]}
         Note: Could be structured more clearly; made for easy (un)packing.
         """
-        self._rosters: dict[str, list[list[str]]] = {}
+        self.rosters: dict[str, list[list[str]]] = {}
         """
         ### Rosters
         Dictionary of days tied to all possible combinations of trunkers 
@@ -72,9 +93,9 @@ class Show:
                 for role in self.get_role_names()
             ]
             # Store availabilities
-            self._role_availabilities[day] = role_availabilities
+            self.role_availabilities[day] = role_availabilities
             # Initialize roster
-            self._rosters[day] = []
+            self.rosters[day] = []
             # Calculate rosters from availabilities
             self._calculate_rosters(role_availabilities, day)
 
@@ -82,51 +103,33 @@ class Show:
         """
         Returns list of role names.
         """
-        return list(self._data.columns)[1 : self.num_roles + 1]
+        return list(self.data.columns)[1 : self.num_roles + 1]
 
     def get_day_names(self) -> list[str]:
         """
         Returns list of day names.
         """
         # Accesses the day columns past the role columns
-        return list(self._data.columns)[
+        return list(self.data.columns)[
             self.num_roles + 1 : self.num_roles + self.num_days + 1
         ]
-
-    def get_trunker_names(self) -> list[str]:
-        """
-        Returns list of trunker names.
-        """
-        return list(self._data["Trunker"])
-
-    def get_trunker_availabilities(self, day: str) -> list[str]:
-        """
-        Returns list of trunker availabilities.
-        """
-        return self._trunker_availabilities[day]
-
-    def get_role_availabilities(self, day: str) -> list[list[str]]:
-        """
-        Returns list of role availabilities.
-        """
-        return self._role_availabilities[day]
 
     def get_rosters(self, day: str) -> list[list[str]]:
         """
         Returns list of day rosters.
         """
-        return self._rosters[day]
+        return self.rosters[day]
 
     def _calculate_availabilities(self, role: str, day: str) -> list[str]:
         """
         Returns list of trunkers available for role on day.
         """
         # Gets list of available trunkers on a day
-        availabilities = self._data["Trunker"] * self._data[day]
+        availabilities = self.data["Trunker"] * self.data[day]
         # Assigns to member dictionary
-        self._trunker_availabilities[day] = list(filter(None, availabilities))
+        self.trunker_availabilities[day] = list(filter(None, availabilities))
         # Returns list of available trunkers on a day in a role
-        return list(filter(None, availabilities * self._data[role]))
+        return list(filter(None, availabilities * self.data[role]))
 
     def _calculate_rosters(
         self,
@@ -141,7 +144,7 @@ class Show:
         # If index has reached the end of the roles list:
         if index == self.num_roles:
             # Add copy of roster to list
-            self._rosters[day].append(roster.copy())
+            self.rosters[day].append(roster.copy())
             return
         # Iterates through roles:
         for role_index, role in enumerate(availabilities):
@@ -164,64 +167,105 @@ def print_shows() -> None:
     """
     Loads data sheet and prints out Trunker availability and possible rosters.
     """
-    # Defines number of roles in show
-    num_roles = 5
-    num_days = 3
-    # Takes input on sheet name
-    sheet_name = input("Please enter show name (data sheet name): ")
-    # sheet_name = "Trash Mountain"
+    sheet_name = entry.get()
+    try:
+        data_frame = pd.read_excel(DATA_PATH, sheet_name)
+    except FileNotFoundError:
+        output(
+            f"\n{DATA_PATH} not found! Make sure the excel file exists in "
+            "the same directory as script!\n"
+        )
+        return
+    except ValueError:
+        output(f"\n'{sheet_name}' not found as sheet within {DATA_PATH}.\n")
+        return
     # Reads excel data into dictionary
-    show = Show(pd.read_excel(DATA_PATH, sheet_name), num_roles, num_days)
+    show = Show(data_frame, NUM_ROLES, NUM_DAYS)
+    # Fabricates waittime (Makes it feel like it's doin' somethin')
+    output("\nCalculating show details. ", newline=False)
+    for _ in range(10):
+        time.sleep(0.55 + random.uniform(-0.5, 0.25))
+        output(". ", newline=False)
+    output("")
 
     # Gets names of all roles
     role_names = show.get_role_names()
     # Makes combined list of trunker names and roles
-    full_strings = show.get_trunker_names() + role_names
+    full_strings = list(show.data["Trunker"]) + role_names
     # Finds the maximum length of string within trunker names and roles
     spacing = max(len(item) for item in full_strings) + DISPLAY_PADDING
     # Defines the full display width
-    display_width = spacing * num_roles
+    display_width = spacing * NUM_ROLES
+    output_text.configure(width=display_width)
     # For each day:
     for day in show.get_day_names():
         # Prints title bar
-        print("\n" + f" {day.upper()} ".center(display_width, "="))
+        output("\n" + f" {day.upper()} ".center(display_width, "="))
+
+        # Helper function for creating strings with vertical bars
+        def between_lines(content: str) -> str:
+            return "| " + content.ljust(display_width - 4) + " |"
 
         # Prints availabilities
-        def between_lines(contents: str) -> str:
-            return "| " + contents.ljust(display_width - 4) + " |"
-
         for role_name, role_availabilities in zip(
-            role_names, show.get_role_availabilities(day)
+            role_names, show.role_availabilities[day]
         ):
             role_contents = role_name.upper().ljust(spacing)
             if role_availabilities:
                 role_contents += ", ".join(role_availabilities)
             else:
                 role_contents += "No Trunkers available!"
-            print(between_lines(role_contents))
+            output(between_lines(role_contents))
 
-        print(between_lines(""))
+        output(between_lines(""))
         # Gets total number of trunkers available for day
-        num_trunker_availabilities = len(show.get_trunker_availabilities(day))
+        num_trunker_availabilities = len(show.trunker_availabilities[day])
         report = f"There are {num_trunker_availabilities} trunkers available for shows on {day}."
         # Prints report
-        print(between_lines(report))
+        output(between_lines(report))
         # Prints bottom bar
-        print("=" * display_width + "\n")
+        output("=" * display_width + "\n")
 
         # Prints role titles
-        [print(role_name.center(spacing), end="") for role_name in role_names]
-        print("\n")
+        [output(role_name.center(spacing), newline=False) for role_name in role_names]
+        output("\n")
         # Prints rosters
         rosters = show.get_rosters(day)
         for roster in rosters:
-            [print(trunker.center(spacing), end="") for trunker in roster]
-            print("")
+            [output(trunker.center(spacing), newline=False) for trunker in roster]
+            output("")
         # Prints report
-        print(f"\nThere are {len(rosters)} rosters available for shows on {day}.")
+        output(f"\nThere are {len(rosters)} rosters available for shows on {day}.")
 
-    print("")
+    output("")
 
 
 if __name__ == "__main__":
-    print_shows()
+    # Creates main application window
+    root = tk.Tk()
+    root.title("Trunkinator")
+
+    # Defines a custom font with larger size
+    nice_font = ("Consolas", 14)  # Change the font family and size as needed
+    big_font = ("Consolas", 16)  # Change the font family and size as needed
+
+    # Creates title label for the text entry
+    entry_label = tk.Label(root, text="Show Name (Excel Sheet Name):", font=nice_font)
+    entry_label.pack(padx=10, pady=(10, 0))
+
+    # Creates entry widget for input
+    entry = tk.Entry(root, font=nice_font)
+    entry.pack(padx=10, pady=10)
+
+    # Creates submit button
+    submit_button = tk.Button(
+        root, text="Generate Show", font=nice_font, command=print_shows
+    )
+    submit_button.pack(pady=5)
+
+    # Creates text widget for output
+    output_text = scrolledtext.ScrolledText(root, width=30, height=17, font=big_font)
+    output_text.pack(padx=10, pady=10)
+
+    # Runs the application
+    root.mainloop()

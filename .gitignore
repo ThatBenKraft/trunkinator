@@ -1,5 +1,6 @@
 # VScode / python garbage files
 .vscode/
 tempCodeRunnerFile.py
-testing.py
+/lib
+/testing
 # Libraries
